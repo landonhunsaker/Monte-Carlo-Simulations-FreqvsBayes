@@ -7,7 +7,7 @@ Goal: Compare frequentist and Bayesian methods for estimating a binomial proport
 ## Files Included:
 - A finished HTML file with the introduction, background, and analysis of the project. Included are any supplementary graphs.
 
--** Within src folder:**
+- **Within src folder:**
   - A QMD file used to produce the above HTML.
   - An R file including all code used to produce the HTML final product and Metadata.
 
