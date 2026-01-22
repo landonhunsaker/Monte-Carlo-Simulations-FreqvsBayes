@@ -1,0 +1,201 @@
+---
+title: "Frequetist vs. Bayes MSE and Coverage"
+author: "Landon Hunsaker"
+date: "2025-12-01"
+format:
+  html:
+    embed-resources: true
+---
+
+## Portfolio Project 2:
+
+```{r, include=FALSE}
+#| label: metadata
+#| purl: true
+# Name: Landon Hunsaker
+# Date: 2025-11-17
+# Purpose: Portfolio Analysis #2
+# ------------------------------------------------------------------------------
+```
+
+```{r, include=FALSE}
+#| label: Packages Setup
+#| purl: true
+
+library(ggplot2)
+library(tidyverse)
+```
+
+## Introduction:
+
+Today we will compare frequentist and Bayesian methods for estimating a binomial proportion. To do so, I will look at the mean squared error of the point estimators from each approach to see how accurately it estimates the true (known) probability. Next,we will plot the coverage of the corresponding interval estimators, measuring how often those intervals successfully contain the true value. The goal here is to estimate the accuracy and effectiveness of these estimators in different conditions. Then, compare them to each other.
+
+## Methods:
+
+To achieve the Monte Carlo study, I  tested several different sample sizes and several different true probability values. The sample sizes range from 5-30 and the probabilities range from .1 to .9. Now, for every combination of these values, I generated 10000 simulated binomial samples. From each sample, I calculated both the frequentist estimate and the Bayesian estimate, as well as their corresponding interval estimates. Using all of the simulated replications, I then computed the mean-squared error for the point estimators and the coverage probability for the interval estimators.
+
+
+```{r,echo=FALSE}
+#| label: Assigning Variables and Functions
+#| purl: true
+
+n <- c(5, 10, 15, 20, 25, 30)
+p <- c(.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
+alpha <- 0.05
+z <- qnorm(1 - alpha/2)
+
+fph <- function(Y,n){
+  Y/n
+}
+bph <- function(Y,n){
+  (0.5+Y) / (1 + n)
+}
+
+fs <- function(fph, n, z){
+  se <- sqrt(fph * (1 - fph) / n)
+  LB <- fph - z * se
+  UB <- fph + z * se
+  return(
+    list(
+      Standard_Error=se,
+      Lower_Bound=LB,
+      Upper_Bound=UB
+    )
+  )
+}
+
+bs <- function(alpha,y,n){
+  LE <- qbeta(alpha/2, 0.5 + y, 0.5 + n - y)
+  UB <- qbeta(1-alpha/2, 0.5 + y, 0.5 + n - y)
+  return(
+    list(
+      Lower_Estimate=LE,
+      Upper_Estimate=UB
+    )
+  )
+}
+
+msef <- function(fph,p){
+  mean((fph  - p)^2)
+}
+
+mseb <- function(bph,p){
+  mean((bph - p)^2)
+}
+
+```
+
+```{r,echo=FALSE}
+#| label: Simulations
+#| purl: true
+
+results <- expand.grid(p = p, n = n)
+  results$MSE_freq  <- NA
+  results$MSE_bayes <- NA
+  results$Cov_freq  <- NA
+  results$Cov_bayes <- NA
+
+
+for (i in seq_along(n)){
+  for (j in seq_along(p)){
+    
+      Y = rbinom(1e4,n[i],p[j])
+      
+      phfreq <- fph(Y,n[i])
+      phbayes <- bph(Y,n[i])
+      
+      freq_mse <- msef(phfreq,p[j])
+      bays_mse <- mseb(phbayes,p[j])
+      
+      f <- fs(phfreq, n[i], z)
+      b <- bs(alpha, Y, n[i])
+      
+      ###coverage
+      
+      freq_coverage <- mean(f$Lower_Bound <= p[j] & p[j] <= f$Upper_Bound)
+      bayes_coverage <- mean(b$Lower_Estimate <= p[j] & p[j] <= b$Upper_Estimate)
+      
+      ### results
+      
+      row <- (i-1)*length(p) + j
+      results$MSE_freq[row]  <- freq_mse
+      results$MSE_bayes[row] <- bays_mse
+      results$Cov_freq[row]  <- freq_coverage
+      results$Cov_bayes[row] <- bayes_coverage
+      
+  }
+}
+```
+
+## Results:
+
+```{r,echo=FALSE}
+#| label: Graphics
+#| purl: true
+
+mse <- results|> pivot_longer(
+  cols = c(MSE_freq,MSE_bayes),
+  names_to = "Estimator",
+  values_to="MSE"
+)
+
+fin <- results |> pivot_longer(
+  cols=c(Cov_freq,Cov_bayes),
+  names_to = "Interval",
+  values_to="Coverage"
+)
+
+
+### MSE Plot
+ggplot(data=mse)+
+  geom_point(mapping=aes(x=p, y=MSE, color=Estimator))+
+  facet_wrap(~n)+
+  theme_bw()+
+  labs(
+    title = "Frequentist vs. Bayesian",
+    subtitle="Mean Squared Error",
+    x = "Probability",
+    y = " Mean Squared Error"
+  )
+
+### Coverage Plot
+
+ggplot(data=fin)+
+  geom_point(mapping=aes(x=p,y=Coverage, color=Interval))+
+  facet_wrap(~n)+
+  labs(
+    title="Frequentist vs Bayesian",
+    subtitle="Interval Estimators",
+    x="Probability",
+    y="Probability Coverage"
+  )+
+  theme_bw()
+
+
+```
+
+The first plot produced is the Mean Squared Error plot. This plot contrasts bayesian vs frequentist squared errors. In essence, it is telling how far away the guess was from the actual value. A lower number is ideal here. In red is bayesian and in blue is the frequentist approach.
+
+The second plot shown here is the estimator coverage between the two models. This graph is telling us what percentage of time the method was able to capture the true probability in a confidence interval. Ideally, they would be above 95% all the time here, but at low sample sizes, sometimes both didnt make this mark. Shown in blue is the frequentist, which is far below the acceptable rang eat times. Sometimes have its confidence interval capture the mean only 40% of the time.
+
+## Conclusions:
+
+In the Monte Carlo Simulations, the Baysian MSEs were consistently lower than frequentist MSEs. At low probabilities this was especially apparent. The larger the size of the binomial, the less distance seperated the two MSEs for mid range values. When the n and probability are both low, the bayesian approach appears to be more accurate based off of this data.
+
+In terms of coverage, the baysian approach did better again. It's coverage is at or near 95%, for the wald (frequentist) intervals, there coverage was significantly less. Once again at low probability and low binomial trial size,it suffered greatly. 
+
+In these Monte Carlo Simulations, the baysian approach had less MSE and greater coverage. This method reacted less harshly to low probabilities and low sample size. The frequentist approach suffered the most at low probabilities and low n values.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
